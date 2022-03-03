@@ -183,6 +183,9 @@ typedef struct VAAPIEncodeContext {
     // Use low power encoding mode.
     int             low_power;
 
+    // Force global header
+    int             force_header;
+
     // Number of I frames between IDR frames.
     int             idr_interval;
 
@@ -443,6 +446,10 @@ int ff_vaapi_encode_close(AVCodecContext *avctx);
 
 
 #define VAAPI_ENCODE_COMMON_OPTIONS \
+    { "force_header", \
+      "Force global header", \
+      OFFSET(common.force_header), AV_OPT_TYPE_BOOL, \
+      { .i64 = 0 }, 0, 1, FLAGS }, \
     { "low_power", \
       "Use low-power encoding mode (only available on some platforms; " \
       "may not support all encoding features)", \

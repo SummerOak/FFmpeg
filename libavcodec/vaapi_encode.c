@@ -2499,9 +2499,8 @@ av_cold int ff_vaapi_encode_init(AVCodecContext *avctx)
         }
     }
 
-    if (ctx->va_packed_headers & VA_ENC_PACKED_HEADER_SEQUENCE &&
-        ctx->codec->write_sequence_header &&
-        avctx->flags & AV_CODEC_FLAG_GLOBAL_HEADER) {
+    if (ctx->codec->write_sequence_header && (ctx->force_header || ctx->va_packed_headers & VA_ENC_PACKED_HEADER_SEQUENCE &&
+        avctx->flags & AV_CODEC_FLAG_GLOBAL_HEADER)) {
         char data[MAX_PARAM_BUFFER_SIZE];
         size_t bit_len = 8 * sizeof(data);
 
