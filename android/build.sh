@@ -74,6 +74,7 @@ mkdir -p ${OUT}
     --enable-optimizations \
     --enable-swscale \
     --enable-static \
+    --enable-shared \
     --enable-v4l2-m2m \
     --disable-outdev=fbdev \
     --disable-indev=fbdev \

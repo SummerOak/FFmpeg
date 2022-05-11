@@ -27,6 +27,7 @@ FFLIBS-$(CONFIG_AVRESAMPLE) += avresample
 FFLIBS-$(CONFIG_POSTPROC)   += postproc
 FFLIBS-$(CONFIG_SWRESAMPLE) += swresample
 FFLIBS-$(CONFIG_SWSCALE)    += swscale
+FFLIBS-yes					+= ffmpeg
 
 FFLIBS := avutil
 
