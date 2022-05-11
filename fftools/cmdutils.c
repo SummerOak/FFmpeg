@@ -63,6 +63,11 @@
 #include <windows.h>
 #endif
 
+#if RUN_IN_SDK_MODE
+#include <setjmp.h>
+jmp_buf ex_buf__;
+#endif
+
 static int init_report(const char *env);
 
 AVDictionary *sws_dict;
@@ -135,7 +140,11 @@ void exit_program(int ret)
     if (program_exit)
         program_exit(ret);
 
+#if RUN_IN_SDK_MODE
+    longjmp(ex_buf__, ret);
+#else
     exit(ret);
+#endif
 }
 
 double parse_number_or_die(const char *context, const char *numstr, int type,

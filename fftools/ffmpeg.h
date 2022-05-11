@@ -679,4 +679,10 @@ int hw_device_setup_for_filter(FilterGraph *fg);
 
 int hwaccel_decode_init(AVCodecContext *avctx);
 
+#if RUN_IN_SDK_MODE
+int ffmpeg_start(int argc, char **argv);
+int ffmpeg_stop(void);
+void ffmpeg_var_cleanup(void);
+#endif
+
 #endif /* FFTOOLS_FFMPEG_H */

@@ -4961,8 +4961,12 @@ int main(int argc, char **argv)
     int i, ret;
     BenchmarkTimeStamps ti;
 
+#if RUN_IN_SDK_MODE
+    int jmpcode = setjmp(ex_buf__);
+    if (jmpcode == 0) {
+    ffmpeg_var_cleanup();
+#endif
     init_dynload();
-
     register_exit(ffmpeg_cleanup);
 
     setvbuf(stderr,NULL,_IONBF,0); /* win32 runtime needs this */
@@ -5025,5 +5029,56 @@ int main(int argc, char **argv)
         exit_program(69);
 
     exit_program(received_nb_signals ? 255 : main_return_code);
+
+#if RUN_IN_SDK_MODE
+    }else{
+        av_log(NULL, AV_LOG_DEBUG, "return from longjmp: %d", jmpcode);
+        main_return_code = jmpcode;
+    }
+#endif
+
     return main_return_code;
 }
+
+#if RUN_IN_SDK_MODE
+
+void ffmpeg_var_cleanup() {
+    received_sigterm = 0;
+    received_nb_signals = 0;
+    ffmpeg_exited = 0;
+    copy_ts_first_pts = AV_NOPTS_VALUE;
+
+    run_as_daemon = 0;
+    nb_frames_dup = 0;
+    dup_warning = 1000;
+    nb_frames_drop = 0;
+    nb_output_dumped = 0;
+
+    want_sdp = 1;
+
+    progress_avio = NULL;
+
+    input_streams = NULL;
+    nb_input_streams = 0;
+    input_files = NULL;
+    nb_input_files = 0;
+
+    output_streams = NULL;
+    nb_output_streams = 0;
+    output_files = NULL;
+    nb_output_files = 0;
+
+    filtergraphs = NULL;
+    nb_filtergraphs = 0;
+}
+
+int ffmpeg_stop(){
+    sigterm_handler(SIGINT);
+    return 0;
+}
+
+int ffmpeg_start(int argc, char **argv){
+    return main(argc, argv);
+}
+
+#endif
