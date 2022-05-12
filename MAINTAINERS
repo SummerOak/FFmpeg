@@ -301,6 +301,7 @@ libavdevice
   v4l2.c                                Giorgio Vazzana
   vfwcap.c                              Ramiro Polla
   xv.c                                  Lukasz Marek
+  callback.c                            Qianxing Cheng
 
 libavfilter
 ===========

@@ -354,12 +354,16 @@ sigterm_handler(int sig)
     received_sigterm = sig;
     received_nb_signals++;
     term_exit_sigsafe();
+
+#if RUN_IN_SDK_MODE
+#else
     if(received_nb_signals > 3) {
         ret = write(2/*STDERR_FILENO*/, "Received > 3 system signals, hard exiting\n",
                     strlen("Received > 3 system signals, hard exiting\n"));
         if (ret < 0) { /* Do nothing */ };
         exit(123);
     }
+#endif
 }
 
 #if HAVE_SETCONSOLECTRLHANDLER
@@ -507,7 +511,11 @@ static int read_key(void)
 
 static int decode_interrupt_cb(void *ctx)
 {
+#if RUN_IN_SDK_MODE
+    return received_nb_signals > 0;
+#else
     return received_nb_signals > atomic_load(&transcode_init_done);
+#endif
 }
 
 const AVIOInterruptCB int_cb = { decode_interrupt_cb, NULL };
@@ -2258,7 +2266,9 @@ static int ifilter_send_eof(InputFilter *ifilter, int64_t pts)
     ifilter->eof = 1;
 
     if (ifilter->filter) {
-        ret = av_buffersrc_close(ifilter->filter, pts, AV_BUFFERSRC_FLAG_PUSH);
+        if (!received_sigterm) {
+            ret = av_buffersrc_close(ifilter->filter, pts, AV_BUFFERSRC_FLAG_PUSH);
+        }
         if (ret < 0)
             return ret;
     } else {
