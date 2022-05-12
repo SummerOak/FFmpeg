@@ -1,10 +1,6 @@
 
 
-#include <unistd.h>
-#include "libavutil/pixdesc.h"
 #include "libavutil/log.h"
-#include "libavutil/mem.h"
-#include "libavutil/opt.h"
 #include "libavformat/avformat.h"
 #include "avdevice.h"
 
@@ -20,38 +16,39 @@ typedef struct {
 
 static av_cold int buffer_write_header(AVFormatContext *h)
 {
-    CallbackDevContext *buffer = h->priv_data;
-    buffer->cb = (callback*)(buffer->pointer);
-    buffer->cbPriv = (void*)(buffer->priv);
-    av_log(buffer, AV_LOG_DEBUG, "buffer_write_header, buffer=%p, callback=%p pointer=%" PRIu64, 
-        buffer, buffer?buffer->cb:NULL, buffer?buffer->pointer:0);
+    CallbackDevContext *dev = h->priv_data;
+    dev->cb = (callback*)(dev->pointer);
+    dev->cbPriv = (void*)(dev->priv);
+    av_log(dev, AV_LOG_DEBUG, "buffer_write_header, dev=%p, callback=%p pointer=%" PRIu64, 
+        dev, dev?dev->cb:NULL, dev?dev->pointer:0);
 
     if (h->nb_streams != 1 || h->streams[0]->codecpar->codec_type != AVMEDIA_TYPE_VIDEO) {
-        av_log(buffer, AV_LOG_ERROR, "Only a single video stream is supported.\n");
+        av_log(dev, AV_LOG_ERROR, "Only a single video stream is supported.\n");
         return AVERROR(EINVAL);
     }
 
-    buffer->frameIndex = 0;
+    dev->frameIndex = 0;
 
     return 0;
 }
 
 static int buffer_write_packet(AVFormatContext *h, AVPacket *pkt)
 {
-    CallbackDevContext *buffer = h->priv_data;
-    av_log(buffer, AV_LOG_DEBUG, "buffer_write_packet, buffer=%p, callback=%p pointer=%ld priv=%ld", 
-        buffer, buffer?buffer->cb:NULL, buffer?buffer->pointer:0l, buffer?buffer->priv:0l);
+    CallbackDevContext *dev = h->priv_data;
+    av_log(dev, AV_LOG_DEBUG, "buffer_write_packet, dev=%p, callback=%p pointer=%ld priv=%ld", 
+        dev, dev?dev->cb:NULL, dev?dev->pointer:0l, dev?dev->priv:0l);
     
-    if(buffer && buffer->cb){
-        buffer->cb(buffer->cbPriv, buffer->frameIndex, h, pkt);
+    dev->frameIndex++;
+    if(dev && dev->cb){
+        dev->cb(dev->cbPriv, dev->frameIndex, h, pkt);
     }
     return 0;
 }
 
 static av_cold int buffer_write_trailer(AVFormatContext *h)
 {
-    CallbackDevContext *buffer = h->priv_data;
-    av_log(buffer, AV_LOG_DEBUG, "buffer_write_trailer");
+    CallbackDevContext *dev = h->priv_data;
+    av_log(dev, AV_LOG_DEBUG, "buffer_write_trailer");
     return 0;
 }
 
@@ -72,8 +69,8 @@ static const AVClass shmdev_class = {
 };
 
 AVOutputFormat ff_callback_muxer = {
-    .name           = "buffer",
-    .long_name      = NULL_IF_CONFIG_SMALL("buffer output dev"),
+    .name           = "callback",
+    .long_name      = NULL_IF_CONFIG_SMALL("Callback output dev"),
     .priv_data_size = sizeof(CallbackDevContext),
     .audio_codec    = AV_CODEC_ID_NONE,
     .video_codec    = AV_CODEC_ID_RAWVIDEO,
