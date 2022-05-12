@@ -68,16 +68,15 @@ mkdir -p ${OUT}
     --cxx="${CXX}" \
     --target-os=android \
     ${ARCH_OPTIONS} \
-    --enable-cross-compile \
-    --enable-pic \
-    --enable-jni \
-    --enable-optimizations \
-    --enable-swscale \
-    --enable-static \
-    --enable-shared \
-    --enable-v4l2-m2m \
-    --disable-outdev=fbdev \
-    --disable-indev=fbdev \
+    --disable-decoders \
+    --disable-encoders \
+    --disable-demuxers \
+    --disable-muxers  \
+    --disable-parsers \
+    --disable-bsfs  \
+    --enable-protocols \
+    --disable-devices \
+    --disable-filters \
     --disable-openssl \
     --disable-xmm-clobber-test \
     --disable-neon-clobber-test \
@@ -104,7 +103,28 @@ mkdir -p ${OUT}
     --disable-cuda \
     --disable-cuvid \
     --disable-nvenc \
-    --disable-vdpau 
+    --disable-vdpau \
+        \
+    --enable-pthreads \
+    --enable-encoder=rawvideo \
+    --enable-demuxer=rtsp \
+    --enable-demuxer=sdp \
+    --enable-decoder=h264 \
+    --enable-protocol=rtp \
+    --enable-protocol=srtp \
+    --enable-parser=h264 \
+    --enable-filter=scale \
+    --enable-filter=crop \
+    --enable-outdev=callback \
+    --enable-cross-compile \
+    --enable-pic \
+    --enable-jni \
+    --enable-optimizations \
+    --enable-swscale \
+    --enable-static \
+    --enable-shared \
+    --enable-v4l2-m2m \
+
 
 if [ $? -ne 0 ]; then
     echo "failed"
@@ -113,3 +133,5 @@ fi
 
 make -j8
 make install
+
+cp ${BASEDIR}/config.h ${BASEDIR}/android/include/
