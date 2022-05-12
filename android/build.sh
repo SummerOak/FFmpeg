@@ -83,6 +83,8 @@ mkdir -p ${OUT}
     --disable-neon-clobber-test \
     --disable-postproc \
     --disable-doc \
+    --disable-zlib \
+    --disable-indevs \
     --disable-htmlpages \
     --disable-manpages \
     --disable-podpages \
