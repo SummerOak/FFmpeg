@@ -2,56 +2,60 @@
 BASEDIR=$(pwd)
 TOOLCHAIN="darwin-x86_64"
 OUT="${BASEDIR}/android"
-TARGET_CPU="armv8-a"
-TARGET_ARCH="aarch64"
+# ARCH=aarch64
+ARCH=arm-v7a
 API=24
+BUILD_HOST=""
+CC_HOST=""
+ARCH_OPTIONS=""
 
-get_build_host() {
-    case ${ARCH} in
-        arm-v7a | arm-v7a-neon)
-            echo "arm-linux-androideabi"
-        ;;
-        arm64-v8a)
-            echo "aarch64-linux-android"
-        ;;
-        x86)
-            echo "i686-linux-android"
-        ;;
-        x86-64)
-            echo "x86_64-linux-android"
-        ;;
-    esac
-}
+case ${ARCH} in
+arm-v7a)
+    TARGET_CPU="armv7-a"
+    TARGET_ARCH="armv7-a"
+    ASM_OPTIONS=" --disable-neon --enable-asm --enable-inline-asm"
+    BUILD_HOST="arm-linux-androideabi"
+    CC_HOST="armv7a-linux-androideabi${API}"
+    ;;
+arm-v7a-neon)
+    TARGET_CPU="armv7-a"
+    TARGET_ARCH="armv7-a"
+    ASM_OPTIONS=" --enable-neon --enable-asm --enable-inline-asm --build-suffix=_neon"
+    BUILD_HOST="arm-linux-androideabi"
+    CC_HOST="armv7a-linux-androideabi${API}"
+    ;;
+arm64-v8a|aarch64)
+    TARGET_CPU="armv8-a"
+    TARGET_ARCH="aarch64"
+    ASM_OPTIONS=" --enable-neon --enable-asm --enable-inline-asm"
+    BUILD_HOST="aarch64-linux-android"
+    CC_HOST="aarch64-linux-android${API}"
+    ;;
+x86)
+    TARGET_CPU="i686"
+    TARGET_ARCH="i686"
+    BUILD_HOST="i686-linux-android"
+    CC_HOST="i686-linux-android${API}"
 
-get_clang_target_host() {
-    case ${ARCH} in
-        arm-v7a | arm-v7a-neon)
-            echo "armv7a-linux-androideabi${API}"
-        ;;
-        arm64-v8a)
-            echo "aarch64-linux-android${API}"
-        ;;
-        x86)
-            echo "i686-linux-android${API}"
-        ;;
-        x86-64)
-            echo "x86_64-linux-android${API}"
-        ;;
-    esac
-}
-
-ARCH="arm64-v8a"
-BUILD_HOST=$(get_build_host)
-ARCH_OPTIONS="	--enable-neon --enable-asm --enable-inline-asm"
+    # asm disabled due to this ticket https://trac.ffmpeg.org/ticket/4928
+    ASM_OPTIONS=" --disable-neon --disable-asm --disable-inline-asm"
+    ;;
+x86-64)
+    TARGET_CPU="x86_64"
+    TARGET_ARCH="x86_64"
+    ASM_OPTIONS=" --disable-neon --enable-asm --enable-inline-asm"
+    BUILD_HOST="x86_64-linux-android"
+    CC_HOST="x86_64-linux-android${API}"
+    ;;
+esac
 
 export PATH=$PATH:${ANDROID_NDK_ROOT}/toolchains/llvm/prebuilt/${TOOLCHAIN}/bin
 export AR=${BUILD_HOST}-ar
-export CC=$(get_clang_target_host)-clang
-export CXX=$(get_clang_target_host)-clang++
+export CC=${CC_HOST}-clang
+export CXX=${CC_HOST}-clang++
 export LD=${BUILD_HOST}-ld
 export RANLIB=${BUILD_HOST}-ranlib
 export STRIP=${BUILD_HOST}-strip
-
 
 mkdir -p ${OUT}
 
@@ -107,6 +111,8 @@ mkdir -p ${OUT}
         \
     --enable-pthreads \
     --enable-encoder=rawvideo \
+    --enable-encoder=pcm_s16le \
+    --enable-decoder=opus \
     --enable-demuxer=rtsp \
     --enable-demuxer=sdp \
     --enable-decoder=h264 \
@@ -115,6 +121,7 @@ mkdir -p ${OUT}
     --enable-parser=h264 \
     --enable-filter=scale \
     --enable-filter=crop \
+    --enable-filter=aresample \
     --enable-outdev=callback \
     --enable-cross-compile \
     --enable-pic \

@@ -22,8 +22,11 @@ static av_cold int buffer_write_header(AVFormatContext *h)
     av_log(dev, AV_LOG_DEBUG, "buffer_write_header, dev=%p, callback=%p pointer=%" PRIu64, 
         dev, dev?dev->cb:NULL, dev?dev->pointer:0);
 
-    if (h->nb_streams != 1 || h->streams[0]->codecpar->codec_type != AVMEDIA_TYPE_VIDEO) {
-        av_log(dev, AV_LOG_ERROR, "Only a single video stream is supported.\n");
+    int codec_type = h->streams[0]->codecpar->codec_type;
+    if (h->nb_streams != 1 || codec_type != AVMEDIA_TYPE_VIDEO && codec_type != AVMEDIA_TYPE_AUDIO) {
+        av_log(dev, AV_LOG_ERROR, 
+            "Only a single video stream is supported. nb_streams=%d, codec_type=%d \n", 
+            h->nb_streams, codec_type);
         return AVERROR(EINVAL);
     }
 
@@ -65,14 +68,14 @@ static const AVClass shmdev_class = {
     .item_name  = av_default_item_name,
     .option     = options,
     .version    = LIBAVUTIL_VERSION_INT,
-    .category   = AV_CLASS_CATEGORY_DEVICE_VIDEO_OUTPUT,
+    .category   = AV_CLASS_CATEGORY_OUTPUT,
 };
 
 AVOutputFormat ff_callback_muxer = {
     .name           = "callback",
     .long_name      = NULL_IF_CONFIG_SMALL("Callback output dev"),
     .priv_data_size = sizeof(CallbackDevContext),
-    .audio_codec    = AV_CODEC_ID_NONE,
+    .audio_codec    = AV_CODEC_ID_PCM_S16LE,
     .video_codec    = AV_CODEC_ID_RAWVIDEO,
     .write_header   = buffer_write_header,
     .write_packet   = buffer_write_packet,
