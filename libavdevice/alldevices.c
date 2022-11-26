@@ -56,6 +56,8 @@ extern AVInputFormat  ff_vfwcap_demuxer;
 extern AVInputFormat  ff_xcbgrab_demuxer;
 extern AVOutputFormat ff_xv_muxer;
 extern AVOutputFormat ff_callback_muxer;
+extern AVInputFormat  ff_shmemdev_demuxer;
+
 
 /* external libraries */
 extern AVInputFormat  ff_libcdio_demuxer;

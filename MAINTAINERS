@@ -302,6 +302,7 @@ libavdevice
   vfwcap.c                              Ramiro Polla
   xv.c                                  Lukasz Marek
   callback.c                            Qianxing Cheng
+  shmemdevice.c                         Qianxing Cheng
 
 libavfilter
 ===========
