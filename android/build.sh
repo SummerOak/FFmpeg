@@ -23,6 +23,7 @@ arm-v7a-neon)
     ASM_OPTIONS=" --enable-neon --enable-asm --enable-inline-asm --build-suffix=_neon"
     BUILD_HOST="arm-linux-androideabi"
     CC_HOST="armv7a-linux-androideabi${API}"
+
     ;;
 arm64-v8a|aarch64)
     TARGET_CPU="armv8-a"
@@ -121,6 +122,7 @@ mkdir -p ${OUT}
     --enable-parser=h264 \
     --enable-filter=scale \
     --enable-filter=crop \
+    --enable-filter=volume \
     --enable-filter=aresample \
     --enable-outdev=callback \
     --enable-cross-compile \
