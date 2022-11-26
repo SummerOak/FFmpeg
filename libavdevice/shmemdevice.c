@@ -69,26 +69,26 @@ static int V(int semid) {
     return semop(semid, &sops, 1);
 }
 
-
 typedef struct SHMEMDevContext {
     AVClass *class;          ///< class for private options
-    char *fifo;
+    const char *fifo;
+    AVRational fps;
+    int width, height;       ///< assumed frame resolution
+    const enum AVPixelFormat pixelFmt;
+
     int frame_size;          ///< size in bytes of a grabbed frame
     int64_t time_frame;      ///< time for the next frame to output (in 1/1000000 units)
-
-    int fps;
-    int width, height;       ///< assumed frame resolution
-    int pixelFmt;
-
     int semid;
     uint8_t *data;           ///< framebuffer data
 } SHMEMDevContext;
-
 
 static av_cold int fbdev_read_header(AVFormatContext *avctx)
 {
     int ret;
     SHMEMDevContext *fbdev = avctx->priv_data;
+
+    av_log(avctx, AV_LOG_ERROR, "init shmem dev with width=%d, height=%d, pixelFmt=%d, fps=%d fifo=%s\n", 
+        fbdev->width, fbdev->height, fbdev->pixelFmt, fbdev->fps, fbdev->fifo);
 
     key_t key = ftok(fbdev->fifo, 65);
     if (key == -1) {
@@ -127,6 +127,20 @@ static av_cold int fbdev_read_header(AVFormatContext *avctx)
         av_log(avctx, AV_LOG_ERROR, "sem_init failed %s: %s\n", fbdev->fifo, av_err2str(ret));
         return ret;
     }
+
+    AVStream *st = NULL;
+    if (!(st = avformat_new_stream(avctx, NULL))){
+        return AVERROR(ENOMEM);
+    }
+    avpriv_set_pts_info(st, 64, 1, 1000000); /* 64 bits pts in microseconds */
+    st->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
+    st->codecpar->codec_id   = AV_CODEC_ID_RAWVIDEO;
+    st->codecpar->width      = fbdev->width;
+    st->codecpar->height     = fbdev->height;
+    st->codecpar->format     = fbdev->pixelFmt;
+    st->avg_frame_rate       = fbdev->fps;
+    st->codecpar->bit_rate   = fbdev->frame_size * av_q2d(fbdev->fps) * 8;
+    
     return 0;
 }
 
@@ -149,7 +163,7 @@ static int fbdev_read_packet(AVFormatContext *avctx, AVPacket *pkt)
                 "time_frame:%"PRId64" curtime:%"PRId64" delay:%"PRId64"\n",
                 fbdev->time_frame, curtime, delay);
         if (delay <= 0) {
-            fbdev->time_frame += INT64_C(1000000) / fbdev->fps;
+            fbdev->time_frame += INT64_C(1000000) / av_q2d(fbdev->fps);
             break;
         }
         if (avctx->flags & AVFMT_FLAG_NONBLOCK)
@@ -181,24 +195,47 @@ static av_cold int fbdev_read_close(AVFormatContext *avctx)
 
 static int fbdev_get_device_list(AVFormatContext *s, AVDeviceInfoList *device_list)
 {
-    return ff_fbdev_get_device_list(device_list);
+    if (!device_list)
+        return AVERROR(EINVAL);
+
+    AVDeviceInfo *device = av_mallocz(sizeof(AVDeviceInfo));
+    if (!device) {
+        return AVERROR(ENOMEM);
+    }
+
+    device->device_name = av_strdup("shmem");
+    device->device_description = av_strdup("placeholder");
+    if (!device->device_name || !device->device_description) {
+        return AVERROR(ENOMEM);
+    }
+
+    int ret = 0;
+    if ((ret = av_dynarray_add_nofree(&device_list->devices,
+                                        &device_list->nb_devices, device)) < 0){
+
+        av_freep(&device->device_name);
+        av_freep(&device->device_description);
+        av_freep(&device);
+        return ret;
+    }
+
+    return ret;
 }
 
 #define OFFSET(x) offsetof(SHMEMDevContext, x)
-#define ENC AV_OPT_FLAG_DECODING_PARAM
+#define DEC AV_OPT_FLAG_DECODING_PARAM
 static const AVOption options[] = {
     { "fifo","", OFFSET(fifo), AV_OPT_TYPE_STRING,
-                { .str = NULL }, 0, 0, ENC },
-    { "fps","", OFFSET(fps), AV_OPT_TYPE_VIDEO_RATE, {.str = "30"}, 0, INT_MAX, ENC },
+                { .str = "" }, 0, 0, DEC },
+    { "fps","", OFFSET(fps), AV_OPT_TYPE_VIDEO_RATE, {.str="25"}, 0, INT_MAX, DEC },
     { "fmt","", OFFSET(pixelFmt), AV_OPT_TYPE_PIXEL_FMT, \
-                {.i64 = AV_PIX_FMT_NONE}, -1, INT32_MAX, ENC },
-    { "width","", OFFSET(width), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, ENC },
-    { "height","", OFFSET(height), AV_OPT_TYPE_INT, {.i64 = 0}, 0, INT_MAX, ENC },
+                {.i64 = AV_PIX_FMT_NV12}, -1, INT32_MAX, DEC },
+    { "size","", OFFSET(width), AV_OPT_TYPE_IMAGE_SIZE, {.str = "1280x720"}, 0, 0, DEC },
     { NULL },
 };
 
 static const AVClass shmemdev_class = {
-    .class_name = "shmem indev",
+    .class_name = "shmemdev indev",
     .item_name  = av_default_item_name,
     .option     = options,
     .version    = LIBAVUTIL_VERSION_INT,
