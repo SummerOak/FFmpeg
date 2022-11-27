@@ -32,6 +32,7 @@
 #include <sys/mman.h>
 #include <time.h>
 
+#define _GNU_SOURCE
 #include <sys/shm.h>
 #include <sys/sem.h>
 
@@ -54,31 +55,26 @@ union semun {
 
 static int sem_init(int semid) {
     union semun sem_union;
-
     sem_union.val = 0;
     return semctl(semid, 0, SETVAL, sem_union);
 }
 
-static int P(int semid) {
+int  semtimedop(int  semid, struct sembuf *sops, unsigned nsops, struct timespec *timeout);
+static int P(int semid, const struct timespec *timeout) {
     struct sembuf sops = {0, -1, 0};
-    return semop(semid, &sops, 1);
-}
-
-static int V(int semid) {
-    struct sembuf sops = {0, +1, 0};
-    return semop(semid, &sops, 1);
+    return semtimedop(semid, &sops, 1, timeout);
 }
 
 typedef struct SHMEMDevContext {
     AVClass *class;          ///< class for private options
     const char *fifo;
-    AVRational fps;
+    AVRational minfps;
     int width, height;       ///< assumed frame resolution
     const enum AVPixelFormat pixelFmt;
 
     int frame_size;          ///< size in bytes of a grabbed frame
-    int64_t time_frame;      ///< time for the next frame to output (in 1/1000000 units)
     int semid;
+    struct timespec timeout;
     uint8_t *data;           ///< framebuffer data
 } SHMEMDevContext;
 
@@ -87,8 +83,8 @@ static av_cold int fbdev_read_header(AVFormatContext *avctx)
     int ret;
     SHMEMDevContext *fbdev = avctx->priv_data;
 
-    av_log(avctx, AV_LOG_ERROR, "init shmem dev with width=%d, height=%d, pixelFmt=%d, fps=%d fifo=%s\n", 
-        fbdev->width, fbdev->height, fbdev->pixelFmt, fbdev->fps, fbdev->fifo);
+    av_log(avctx, AV_LOG_ERROR, "init shmem dev with width=%d, height=%d, pixelFmt=%d, minfps=%d (den=%d num=%d) fifo=%s\n", 
+        fbdev->width, fbdev->height, fbdev->pixelFmt, fbdev->minfps, fbdev->minfps.den, fbdev->minfps.num, fbdev->fifo);
 
     key_t key = ftok(fbdev->fifo, 65);
     if (key == -1) {
@@ -132,56 +128,42 @@ static av_cold int fbdev_read_header(AVFormatContext *avctx)
     if (!(st = avformat_new_stream(avctx, NULL))){
         return AVERROR(ENOMEM);
     }
-    avpriv_set_pts_info(st, 64, 1, 1000000); /* 64 bits pts in microseconds */
+    // avpriv_set_pts_info(st, 64, 1, 1000000); /* 64 bits pts in microseconds */
     st->codecpar->codec_type = AVMEDIA_TYPE_VIDEO;
     st->codecpar->codec_id   = AV_CODEC_ID_RAWVIDEO;
     st->codecpar->width      = fbdev->width;
     st->codecpar->height     = fbdev->height;
     st->codecpar->format     = fbdev->pixelFmt;
-    st->avg_frame_rate       = fbdev->fps;
-    st->codecpar->bit_rate   = fbdev->frame_size * av_q2d(fbdev->fps) * 8;
-    
+    // st->avg_frame_rate       = fbdev->fps;
+    // st->codecpar->bit_rate   = fbdev->frame_size * av_q2d(fbdev->fps) * 8;
+
+    fbdev->timeout.tv_sec = fbdev->minfps.den/fbdev->minfps.num;
+    fbdev->timeout.tv_nsec = (1e9 * fbdev->minfps.den)/fbdev->minfps.num - 1e9 * (fbdev->timeout.tv_sec);
     return 0;
 }
 
 static int fbdev_read_packet(AVFormatContext *avctx, AVPacket *pkt)
 {
     SHMEMDevContext *fbdev = avctx->priv_data;
-    int64_t curtime, delay;
+    int ret;
+
     struct timespec ts;
-    int i, ret;
-    uint8_t *pin, *pout;
-
-    if (fbdev->time_frame == AV_NOPTS_VALUE)
-        fbdev->time_frame = av_gettime_relative();
-
-    /* wait based on the frame rate */
-    while (1) {
-        curtime = av_gettime_relative();
-        delay = fbdev->time_frame - curtime;
-        av_log(avctx, AV_LOG_TRACE,
-                "time_frame:%"PRId64" curtime:%"PRId64" delay:%"PRId64"\n",
-                fbdev->time_frame, curtime, delay);
-        if (delay <= 0) {
-            fbdev->time_frame += INT64_C(1000000) / av_q2d(fbdev->fps);
-            break;
-        }
-        if (avctx->flags & AVFMT_FLAG_NONBLOCK)
-            return AVERROR(EAGAIN);
-        ts.tv_sec  =  delay / 1000000;
-        ts.tv_nsec = (delay % 1000000) * 1000;
-        while (nanosleep(&ts, &ts) < 0 && errno == EINTR);
+    ts.tv_sec  = fbdev->timeout.tv_sec;
+    ts.tv_nsec = fbdev->timeout.tv_nsec;
+    
+    if (P(fbdev->semid, &ts) == -1 && errno != EAGAIN) {
+        av_log(avctx, AV_LOG_ERROR, "wait sem failed %s: %s\n", fbdev->fifo, av_err2str(errno));
+        return AVERROR(errno);
     }
 
     if ((ret = av_new_packet(pkt, fbdev->frame_size)) < 0)
         return ret;
 
     pkt->pts = av_gettime();
+    pkt->dts = pkt->pts;
 
-    if (P(fbdev->semid) == -1) {
-        av_log(avctx, AV_LOG_ERROR, "wait sem failed %s: %s\n", fbdev->fifo, av_err2str(errno));
-        return AVERROR(errno);
-    }
+    // int64_t *fts = (int64_t*)((uint8_t*)fbdev->data + fbdev->frame_size);
+    // av_log(avctx, AV_LOG_ERROR, "frame %d %" PRId64 "\n", fbdev->frame_size, *fts);
 
     memcpy(pkt->data, fbdev->data, fbdev->frame_size);
     return fbdev->frame_size;
@@ -189,6 +171,7 @@ static int fbdev_read_packet(AVFormatContext *avctx, AVPacket *pkt)
 
 static av_cold int fbdev_read_close(AVFormatContext *avctx)
 {
+    av_log(avctx, AV_LOG_ERROR, "dev close\n");
     SHMEMDevContext *fbdev = avctx->priv_data;
     return 0;
 }
@@ -227,7 +210,7 @@ static int fbdev_get_device_list(AVFormatContext *s, AVDeviceInfoList *device_li
 static const AVOption options[] = {
     { "fifo","", OFFSET(fifo), AV_OPT_TYPE_STRING,
                 { .str = "" }, 0, 0, DEC },
-    { "fps","", OFFSET(fps), AV_OPT_TYPE_VIDEO_RATE, {.str="25"}, 0, INT_MAX, DEC },
+    { "minfps","", OFFSET(minfps), AV_OPT_TYPE_VIDEO_RATE, {.str="25"}, 0, INT_MAX, DEC },
     { "fmt","", OFFSET(pixelFmt), AV_OPT_TYPE_PIXEL_FMT, \
                 {.i64 = AV_PIX_FMT_NV12}, -1, INT32_MAX, DEC },
     { "size","", OFFSET(width), AV_OPT_TYPE_IMAGE_SIZE, {.str = "1280x720"}, 0, 0, DEC },
