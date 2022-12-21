@@ -2,8 +2,8 @@
 BASEDIR=$(pwd)
 TOOLCHAIN="darwin-x86_64"
 OUT="${BASEDIR}/android"
-# ARCH=aarch64
-ARCH=arm-v7a
+ARCH=aarch64
+# ARCH=arm-v7a
 API=24
 BUILD_HOST=""
 CC_HOST=""

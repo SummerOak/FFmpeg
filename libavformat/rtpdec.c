@@ -868,12 +868,7 @@ static int rtp_parse_one_packet(RTPDemuxContext *s, AVPacket *pkt,
     } else {
         uint16_t seq = AV_RB16(buf + 2);
         int16_t diff = seq - s->seq;
-        if (diff < 0) {
-            /* Packet older than the previously emitted one, drop */
-            av_log(s->ic, AV_LOG_WARNING,
-                   "RTP: dropping old packet received too late\n");
-            return -1;
-        } else if (diff <= 1) {
+        if (diff <= 1) {
             /* Correct packet */
             rv = rtp_parse_packet_internal(s, pkt, buf, len);
             return rv;
